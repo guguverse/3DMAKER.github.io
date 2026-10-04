@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>3DMAKER</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family: -apple-system,'Segoe UI',Roboto,sans-serif; overflow:hidden; background:#1e1e24; color:#eee; }
+  #app { display:flex; height:100vh; width:100vw; }
+  #sidebar { width:280px; background:#2a2a32; border-right:1px solid #3a3a44; display:flex; flex-direction:column; overflow-y:auto; }
+  #sidebar h1 { font-size:17px; padding:16px; background:linear-gradient(135deg,#3a5a9a,#6a3a9a); text-align:center; letter-spacing:1.5px; color:#fff; }
+  #sidebar h1 span { color:#4ade80; }
+  .section { padding:12px 16px; border-bottom:1px solid #3a3a44; }
+  .section h3 { font-size:11px; text-transform:uppercase; color:#888; margin-bottom:8px; letter-spacing:1px; }
+  .btn-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
+  .shape-btn { background:#35353f; border:1px solid #44444f; color:#ddd; padding:10px 4px; border-radius:6px; cursor:pointer; font-size:10px; text-align:center; transition:all .15s; }
+  .shape-btn:hover { background:#4a4a58; transform:translateY(-1px); }
+  .shape-btn .icon { font-size:18px; display:block; margin-bottom:3px; }
+  .btn { width:100%; background:#3a5a9a; border:none; color:white; padding:9px; border-radius:6px; cursor:pointer; font-size:12px; margin-bottom:6px; transition:background .15s; }
+  .btn:hover { background:#4a6aaa; }
+  .btn.danger { background:#8a3a3a; }
+  .btn.success { background:#3a7a4a; }
+  .btn.secondary { background:#4a4a55; }
+  #objList { max-height:180px; overflow-y:auto; }
+  .obj-item { padding:6px 10px; background:#35353f; border-radius:4px; margin-bottom:4px; font-size:11px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .obj-item:hover { background:#45454f; }
+  .obj-item.selected { background:#3a5a9a; }
+  .obj-item .del { color:#e66; font-weight:bold; cursor:pointer; padding:0 4px; }
+  .row { display:flex; gap:6px; margin-bottom:6px; align-items:center; }
+  .triple { display:grid; grid-template-columns:14px 1fr 14px 1fr 14px 1fr; gap:3px; align-items:center; }
+  .triple span { font-size:10px; color:#888; font-weight:bold; }
+  input[type=number], input[type=text] { background:#23232a; border:1px solid #44444f; color:#ddd; padding:5px 6px; border-radius:4px; font-size:11px; width:100%; min-width:0; }
+  input[type=color] { width:100%; height:32px; background:transparent; border:1px solid #44444f; border-radius:4px; cursor:pointer; }
+  #viewport { flex:1; position:relative; }
+  canvas { display:block; }
+  #toolbar { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:rgba(35,35,42,.95); border:1px solid #44444f; border-radius:8px; padding:6px; display:flex; gap:4px; z-index:10; }
+  #toolbar button { background:transparent; border:none; color:#ccc; padding:6px 12px; border-radius:5px; cursor:pointer; font-size:12px; }
+  #toolbar button:hover { background:#3a3a44; color:#fff; }
+  #toolbar button.active { background:#3a5a9a; color:#fff; }
+  #info { position:absolute; bottom:12px; left:12px; background:rgba(35,35,42,.9); padding:6px 12px; border-radius:6px; font-size:11px; color:#aaa; }
+  #toast { position:absolute; top:70px; left:50%; transform:translateX(-50%); background:#3a7a4a; color:white; padding:10px 20px; border-radius:6px; font-size:13px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:100; }
+  #toast.show { opacity:1; }
+  #toast.error { background:#8a3a3a; }
+  input[type=file] { display:none; }
+  #error { position:absolute; top:0; left:0; right:0; background:#8a3a3a; color:white; padding:10px; font-size:12px; z-index:999; display:none; }
+</style>
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <h1>3D<span>MAKER</span></h1>
+    <div class="section">
+      <h3>Add Shape</h3>
+      <div class="btn-grid">
+        <button class="shape-btn" data-shape="box"><span class="icon">⬛</span>Box</button>
+        <button class="shape-btn" data-shape="sphere"><span class="icon">⚪</span>Sphere</button>
+        <button class="shape-btn" data-shape="cylinder"><span class="icon">⬤</span>Cylinder</button>
+        <button class="shape-btn" data-shape="cone"><span class="icon">▲</span>Cone</button>
+        <button class="shape-btn" data-shape="torus"><span class="icon">◎</span>Torus</button>
+        <button class="shape-btn" data-shape="capsule"><span class="icon">▮</span>Capsule</button>
+      </div>
+    </div>
+    <div class="section">
+      <h3>Objects</h3>
+      <div id="objList"></div>
+    </div>
+    <div class="section">
+      <h3>Properties</h3>
+      <div id="inspector"><div style="font-size:11px;color:#666;text-align:center;padding:10px;">Select an object</div></div>
+    </div>
+    <div class="section">
+      <h3>Project</h3>
+      <button class="btn success" id="saveBtn">💾 Save Project</button>
+      <button class="btn" id="loadBtn">📂 Load Project</button>
+      <button class="btn secondary" id="exportBtn">⬇ Export OBJ</button>
+      <input type="file" id="fileInput" accept=".json">
+    </div>
+    <div class="section">
+      <button class="btn danger" id="clearBtn">🗑 Clear Scene</button>
+    </div>
+  </aside>
+  <main id="viewport">
+    <div id="toolbar">
+      <button data-mode="select" class="active">🖱 Select</button>
+      <button data-mode="translate">✥ Move</button>
+      <button data-mode="rotate">⟳ Rotate</button>
+      <button data-mode="scale">⤢ Scale</button>
+    </div>
+    <div id="info">LMB — select · RMB — orbit · Wheel — zoom · Del — delete</div>
+    <div id="toast"></div>
+    <div id="error"></div>
+  </main>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { TransformControls } from 'three/addons/controls/TransformControls.js';
+
+// Global error display
+window.addEventListener('error', (e) => {
+  const box = document.getElementById('error');
+  box.style.display = 'block';
+  box.textContent = 'Error: ' + e.message;
+});
+
+// ---------- Scene ----------
+const viewport = document.getElementById('viewport');
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a20);
+
+const camera = new THREE.PerspectiveCamera(50, viewport.clientWidth / viewport.clientHeight, 0.1, 2000);
+camera.position.set(8, 8, 12);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(viewport.clientWidth, viewport.clientHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+viewport.appendChild(renderer.domElement);
+
+const orbit = new OrbitControls(camera, renderer.domElement);
+orbit.enableDamping = true;
+orbit.dampingFactor = 0.1;
+orbit.mouseButtons = {
+  LEFT: null,
+  MIDDLE: THREE.MOUSE.DOLLY,
+  RIGHT: THREE.MOUSE.ROTATE
+};
+
+// Lights
+scene.add(new THREE.HemisphereLight(0xffffff, 0x222233, 1.0));
+const dirLight = new THREE.DirectionalLight(0xffffff, 2.0);
+dirLight.position.set(10, 20, 10);
+dirLight.castShadow = true;
+dirLight.shadow.mapSize.set(2048, 2048);
+dirLight.shadow.camera.left = -30;
+dirLight.shadow.camera.right = 30;
+dirLight.shadow.camera.top = 30;
+dirLight.shadow.camera.bottom = -30;
+scene.add(dirLight);
+
+// Grid + floor
+const grid = new THREE.GridHelper(40, 40, 0x555566, 0x333340);
+scene.add(grid);
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(40, 40),
+  new THREE.MeshStandardMaterial({ color: 0x252530, side: THREE.DoubleSide })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.position.y = -0.001;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ---------- Transform ----------
+const transform = new TransformControls(camera, renderer.domElement);
+transform.setSize(0.9);
+transform.addEventListener('dragging-changed', e => { orbit.enabled = !e.value; });
+transform.addEventListener('objectChange', () => {
+  if (transform.object) syncInspector(transform.object);
+});
+scene.add(transform);
+
+// ---------- State ----------
+const objects = [];
+let selected = null;
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+let currentMode = 'select';
+
+// ---------- Colors ----------
+const colors = [0x4a9eff, 0xff6b6b, 0x4ade80, 0xfbbf24, 0xc084fc, 0x22d3ee, 0xf472b6, 0x94a3b8];
+let colorIndex = 0;
+const nextColor = () => colors[colorIndex++ % colors.length];
+
+// ---------- Shape factory ----------
+function createGeometry(type) {
+  switch (type) {
+    case 'box':      return new THREE.BoxGeometry(2, 2, 2);
+    case 'sphere':   return new THREE.SphereGeometry(1.3, 32, 24);
+    case 'cylinder': return new THREE.CylinderGeometry(1, 1, 2, 32);
+    case 'cone':     return new THREE.ConeGeometry(1.2, 2.4, 32);
+    case 'torus':    return new THREE.TorusGeometry(1.2, 0.45, 20, 40);
+    case 'capsule':  return new THREE.CapsuleGeometry(0.9, 1.6, 8, 20);
+    default:         return new THREE.BoxGeometry(2, 2, 2);
+  }
+}
+
+function createShape(type, position) {
+  const geo = createGeometry(type);
+  const mat = new THREE.MeshStandardMaterial({ color: nextColor(), roughness: 0.45, metalness: 0.15 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  mesh.position.copy(position || new THREE.Vector3(0, 1.5, 0));
+  mesh.userData.type = type;
+  mesh.name = type.charAt(0).toUpperCase() + type.slice(1);
+
+  scene.add(mesh);
+  objects.push(mesh);
+  selectObject(mesh);
+  refreshObjectList();
+  return mesh;
+}
+
+// ---------- Selection ----------
+function selectObject(obj) {
+  selected = obj;
+  if (obj) {
+    if (currentMode !== 'select') transform.attach(obj);
+    syncInspector(obj);
+  } else {
+    transform.detach();
+    clearInspector();
+  }
+  refreshObjectList();
+}
+
+function clearInspector() {
+  document.getElementById('inspector').innerHTML =
+    '<div style="font-size:11px;color:#666;text-align:center;padding:10px;">Select an object</div>';
+}
+
+function syncInspector(obj) {
+  const c = '#' + new THREE.Color(obj.material.color).getHexString();
+  document.getElementById('inspector').innerHTML = `
+    <div class="row"><input type="text" id="pName" value="${obj.name}"></div>
+    <div style="font-size:10px;color:#888;margin:6px 0 4px;">POSITION</div>
+    <div class="triple">
+      <span>X</span><input type="number" id="pX" step="0.1" value="${obj.position.x.toFixed(2)}">
+      <span>Y</span><input type="number" id="pY" step="0.1" value="${obj.position.y.toFixed(2)}">
+      <span>Z</span><input type="number" id="pZ" step="0.1" value="${obj.position.z.toFixed(2)}">
+    </div>
+    <div style="font-size:10px;color:#888;margin:8px 0 4px;">ROTATION °</div>
+    <div class="triple">
+      <span>X</span><input type="number" id="rX" step="1" value="${THREE.MathUtils.radToDeg(obj.rotation.x).toFixed(1)}">
+      <span>Y</span><input type="number" id="rY" step="1" value="${THREE.MathUtils.radToDeg(obj.rotation.y).toFixed(1)}">
+      <span>Z</span><input type="number" id="rZ" step="1" value="${THREE.MathUtils.radToDeg(obj.rotation.z).toFixed(1)}">
+    </div>
+    <div style="font-size:10px;color:#888;margin:8px 0 4px;">SCALE</div>
+    <div class="triple">
+      <span>X</span><input type="number" id="sX" step="0.1" value="${obj.scale.x.toFixed(2)}">
+      <span>Y</span><input type="number" id="sY" step="0.1" value="${obj.scale.y.toFixed(2)}">
+      <span>Z</span><input type="number" id="sZ" step="0.1" value="${obj.scale.z.toFixed(2)}">
+    </div>
+    <div style="font-size:10px;color:#888;margin:8px 0 4px;">COLOR</div>
+    <div class="row"><input type="color" id="pColor" value="${c}"></div>
+    <div class="row" style="margin-top:8px;">
+      <button class="btn" id="dupBtn" style="margin:0;font-size:11px;">Duplicate</button>
+      <button class="btn danger" id="delBtn" style="margin:0;font-size:11px;">Delete</button>
+    </div>
+  `;
+
+  const bind = (id, fn) => document.getElementById(id).addEventListener('input', fn);
+  bind('pName', e => { obj.name = e.target.value; refreshObjectList(); });
+  bind('pX', e => obj.position.x = parseFloat(e.target.value) || 0);
+  bind('pY', e => obj.position.y = parseFloat(e.target.value) || 0);
+  bind('pZ', e => obj.position.z = parseFloat(e.target.value) || 0);
+  bind('rX', e => obj.rotation.x = THREE.MathUtils.degToRad(parseFloat(e.target.value) || 0));
+  bind('rY', e => obj.rotation.y = THREE.MathUtils.degToRad(parseFloat(e.target.value) || 0));
+  bind('rZ', e => obj.rotation.z = THREE.MathUtils.degToRad(parseFloat(e.target.value) || 0));
+  bind('sX', e => obj.scale.x = parseFloat(e.target.value) || 0.01);
+  bind('sY', e => obj.scale.y = parseFloat(e.target.value) || 0.01);
+  bind('sZ', e => obj.scale.z = parseFloat(e.target.value) || 0.01);
+  bind('pColor', e => obj.material.color.set(e.target.value));
+
+  document.getElementById('dupBtn').onclick = () => duplicateObject(obj);
+  document.getElementById('delBtn').onclick = () => deleteObject(obj);
+}
+
+// ---------- Object list ----------
+function refreshObjectList() {
+  const list = document.getElementById('objList');
+  list.innerHTML = '';
+  if (objects.length === 0) {
+    list.innerHTML = '<div style="font-size:11px;color:#666;text-align:center;padding:8px;">Empty</div>';
+    return;
+  }
+  objects.forEach(obj => {
+    const item = document.createElement('div');
+    item.className = 'obj-item' + (obj === selected ? ' selected' : '');
+    item.innerHTML = `<span>${obj.name}</span><span class="del">✕</span>`;
+    item.onclick = (e) => {
+      if (e.target.classList.contains('del')) deleteObject(obj);
+      else selectObject(obj);
+    };
+    list.appendChild(item);
+  });
+}
+
+// ---------- Ops ----------
+function deleteObject(obj) {
+  const i = objects.indexOf(obj);
+  if (i === -1) return;
+  objects.splice(i, 1);
+  scene.remove(obj);
+  obj.geometry.dispose();
+  obj.material.dispose();
+  if (selected === obj) selectObject(null);
+  refreshObjectList();
+}
+
+function duplicateObject(obj) {
+  const copy = obj.clone();
+  copy.geometry = obj.geometry.clone();
+  copy.material = obj.material.clone();
+  copy.material.color.set(nextColor());
+  copy.position.x += 2.5;
+  copy.name = obj.name + '_copy';
+  copy.userData.type = obj.userData.type;
+  copy.castShadow = true;
+  copy.receiveShadow = true;
+  scene.add(copy);
+  objects.push(copy);
+  selectObject(copy);
+  refreshObjectList();
+}
+
+// ---------- Mouse picking ----------
+function updateMouse(e) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+  mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+}
+
+let downPos = null;
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  if (e.button !== 0) return;
+  downPos = { x: e.clientX, y: e.clientY };
+});
+
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (e.button !== 0) return;
+  if (!downPos) return;
+  const dx = e.clientX - downPos.x;
+  const dy = e.clientY - downPos.y;
+  downPos = null;
+  if (Math.sqrt(dx * dx + dy * dy) > 4) return; // it was a drag
+  if (transform.dragging) return;
+
+  updateMouse(e);
+  raycaster.setFromCamera(mouse, camera);
+  const hits = raycaster.intersectObjects(objects, false);
+  if (hits.length > 0) selectObject(hits[0].object);
+  else selectObject(null);
+});
+
+renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
+
+// ---------- Keyboard ----------
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.key === 'Delete' || e.key === 'Backspace') { if (selected) deleteObject(selected); }
+  if (e.key === 'Escape') selectObject(null);
+  if (e.key === 'g') setMode('translate');
+  if (e.key === 'r') setMode('rotate');
+  if (e.key === 's') setMode('scale');
+  if (e.key === 'q') setMode('select');
+});
+
+// ---------- Toolbar ----------
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('#toolbar button').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === mode);
+  });
+  if (mode === 'select') {
+    transform.detach();
+  } else if (selected) {
+    transform.attach(selected);
+    transform.setMode(mode);
+  }
+}
+document.querySelectorAll('#toolbar button').forEach(btn => {
+  btn.onclick = () => setMode(btn.dataset.mode);
+});
+
+// ---------- Shape buttons ----------
+document.querySelectorAll('.shape-btn').forEach(btn => {
+  btn.onclick = () => {
+    createShape(btn.dataset.shape, new THREE.Vector3(0, 1.5, 0));
+    toast('Added ' + btn.dataset.shape);
+  };
+});
+
+// ---------- Save / Load ----------
+function serializeScene() {
+  return {
+    version: '3DMAKER-1.0',
+    camera: { position: camera.position.toArray(), target: orbit.target.toArray() },
+    objects: objects.map(o => ({
+      type: o.userData.type,
+      name: o.name,
+      position: o.position.toArray(),
+      rotation: [o.rotation.x, o.rotation.y, o.rotation.z],
+      scale: o.scale.toArray(),
+      color: '#' + o.material.color.getHexString()
+    }))
+  };
+}
+
+document.getElementById('saveBtn').onclick = () => {
+  const blob = new Blob([JSON.stringify(serializeScene(), null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '3dmaker-project-' + Date.now() + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Saved!');
+};
+
+document.getElementById('loadBtn').onclick = () => document.getElementById('fileInput').click();
+
+document.getElementById('fileInput').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      loadScene(JSON.parse(ev.target.result));
+      toast('Loaded!');
+    } catch (err) {
+      toast('Load failed', true);
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+};
+
+function loadScene(data) {
+  objects.forEach(o => { scene.remove(o); o.geometry.dispose(); o.material.dispose(); });
+  objects.length = 0;
+  selectObject(null);
+
+  if (data.camera) {
+    if (data.camera.position) camera.position.fromArray(data.camera.position);
+    if (data.camera.target) orbit.target.fromArray(data.camera.target);
+    orbit.update();
+  }
+  if (Array.isArray(data.objects)) {
+    data.objects.forEach(o => {
+      const mesh = createShape(o.type || 'box', new THREE.Vector3().fromArray(o.position || [0, 1.5, 0]));
+      if (o.rotation) mesh.rotation.set(o.rotation[0], o.rotation[1], o.rotation[2]);
+      if (o.scale) mesh.scale.fromArray(o.scale);
+      if (o.color) mesh.material.color.set(o.color);
+      if (o.name) mesh.name = o.name;
+    });
+  }
+  selectObject(null);
+  refreshObjectList();
+}
+
+// ---------- Export OBJ ----------
+document.getElementById('exportBtn').onclick = () => {
+  if (objects.length === 0) { toast('Nothing to export', true); return; }
+  let objText = '# Exported from 3DMAKER\n';
+  let offset = 1;
+  objects.forEach(mesh => {
+    mesh.updateMatrixWorld(true);
+    const geo = mesh.geometry.clone();
+    geo.applyMatrix4(mesh.matrixWorld);
+    const pos = geo.attributes.position;
+    const idx = geo.index;
+    objText += '\no ' + mesh.name + '\n';
+    for (let i = 0; i < pos.count; i++) {
+      objText += `v ${pos.getX(i).toFixed(6)} ${pos.getY(i).toFixed(6)} ${pos.getZ(i).toFixed(6)}\n`;
+    }
+    if (idx) {
+      for (let i = 0; i < idx.count; i += 3) {
+        const a = idx.getX(i) + offset;
+        const b = idx.getX(i + 1) + offset;
+        const c = idx.getX(i + 2) + offset;
+        objText += `f ${a} ${b} ${c}\n`;
+      }
+    } else {
+      for (let i = 0; i < pos.count; i += 3) {
+        objText += `f ${i + offset} ${i + offset + 1} ${i + offset + 2}\n`;
+      }
+    }
+    offset += pos.count;
+  });
+  const blob = new Blob([objText], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '3dmaker-' + Date.now() + '.obj';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Exported OBJ!');
+};
+
+// ---------- Clear ----------
+document.getElementById('clearBtn').onclick = () => {
+  if (!confirm('Clear the entire scene?')) return;
+  objects.forEach(o => { scene.remove(o); o.geometry.dispose(); o.material.dispose(); });
+  objects.length = 0;
+  selectObject(null);
+  refreshObjectList();
+  toast('Scene cleared');
+};
+
+// ---------- Toast ----------
+let toastTimer;
+function toast(msg, isError = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'show' + (isError ? ' error' : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = '', 1800);
+}
+
+// ---------- Resize ----------
+window.addEventListener('resize', () => {
+  const w = viewport.clientWidth, h = viewport.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+
+// ---------- Initial scene ----------
+createShape('box', new THREE.Vector3(-3, 1.5, 0));
+createShape('sphere', new THREE.Vector3(0, 1.5, 0));
+createShape('cylinder', new THREE.Vector3(3, 1.5, 0));
+selectObject(null);
+refreshObjectList();
+
+// ---------- Render loop ----------
+function animate() {
+  requestAnimationFrame(animate);
+  orbit.update();
+  renderer.render(scene, camera);
+}
+animate();
+
+console.log('3DMAKER ready');
+</script>
+</body>
+</html>
